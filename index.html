@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <script src="https://d3js.org/d3.v6.js"></script>
+        <script src="https://unpkg.com/d3-regression@1.3.4/dist/d3-regression.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.min.js"></script>
+        <link rel='stylesheet' href='style.css'>
+    </head>
+    <body>
+        <h1>Internet Speeds</h1>
+        <div id='tooltip' class='hidden'>
+            <p><strong>Transfer speed:</strong></p>
+            <p><span id="value">100</span></p>
+        </div>
+        <div id='downloadchart'>
+        </div>
+        <div id='uploadchart'>
+        </div>
+        <div>
+            <p>All tests automatically scheduled and run using Ookla CLI speedtest utility.</p>
+        </div>
+        <script type='text/javascript'>
+            var height = 500;
+            var width = 1080;
+            var padding = 40;
+            var parseDateTime = d3.timeParse("%Y-%m-%dT%H:%M:%S");
+            var rowconverter = function(d) {
+                return {
+                    Date: parseDateTime(d.Date),
+                    Download: +d.Download,
+                    Upload: +d.Upload,
+                    Server: d.Server
+                };
+            }
+
+            d3.tsv('log.tsv', rowconverter).then(function(d) {
+                var dataset = d;
+
+                var svg = d3.select("#downloadchart")
+                        .append("svg")
+                        .attr("width", width)
+                        .attr("height", height);
+
+                // const date_pad = 1000 * 60 * 60 * 24 * 1;
+
+                var xscale = d3.scaleTime()
+                                .domain([d3.min(dataset, d => d.Date.getTime() * 0.99999), d3.max(dataset, d => d.Date.getTime() * 1.00001)])
+                                .range([padding, width]);
+                var yscale = d3.scaleLinear()
+                                .domain([0, d3.max(dataset, d => d.Download)])
+                                .range([height - padding, padding]);
+
+                var xaxis = d3.axisBottom().scale(xscale).ticks(10);
+                var yaxis = d3.axisLeft().scale(yscale).ticks(10);
+
+                const bandwidth = 0.95;
+
+                var lineGenerator = d3.line()
+                    .x(d => xscale(d[0]))
+                    .y(d => yscale(d[1]));
+
+                var regressionGenerator = d3.regressionLoess()
+                    .x(d => d.Date)
+                    .y(d => d.Download)
+                    .bandwidth(bandwidth);
+
+                svg.append("g")
+                    // .attr("transform", `translate(${margin.left}, ${margin.top})`)
+                    .append("path")
+                    .attr("class", "dline")
+                    .datum(regressionGenerator(dataset))
+                    .attr("d", lineGenerator);
+
+                var lineGenerator = d3.line()
+                    .x(d => xscale(d[0]))
+                    .y(d => yscale(d[1]));
+
+                var regressionGenerator = d3.regressionLoess()
+                    .x(d => d.Date)
+                    .y(d => d.Upload)
+                    .bandwidth(bandwidth);
+
+                svg.append("g")
+                    // .attr("transform", `translate(${margin.left}, ${margin.top})`)
+                    .append("path")
+                    .attr("class", "uline")
+                    .datum(regressionGenerator(dataset))
+                    .attr("d", lineGenerator);
+
+                // Need to reformat the data for plotting the circle series
+                var types = ["Download", "Upload"]
+
+                var color = d3.scaleOrdinal()
+                    .domain(types)
+                    .range(['cyan', 'rgb(251, 255, 0)'])
+
+                var data_ready = types.map(function(grpName) {
+                    return {
+                        type: grpName,
+                        values: dataset.map(function (d) {
+                            return { Date: d.Date, value: +d[grpName], Server: d.Server };
+                        })
+                    };
+                })
+
+                console.table(data_ready)
+
+                svg.selectAll("myDots")
+                    .data(data_ready)
+                    .enter()
+                    .append('g')
+                    .style("fill", function(d) {return color(d.type)})
+                    .attr("data-legend", function(d) {return color(d.type)})
+                    .selectAll("myPoints")
+                    .data(function(d) { return d.values })
+                    .enter()
+                    .append("circle")
+                    .attr("class", "data-circle")
+                    .attr("cx", d => xscale(d.Date))
+                    .attr("cy", d => yscale(d.value))
+                    .attr("r", 4)
+                    .on("mouseover", function (d) {
+                        d3.select("#tooltip")
+                            .classed("hidden", false)
+                            .style("left", d.pageX + 'px')
+                            .style("top", d.pageY + 'px')
+                            .select("#value")
+                            .html(d.target.__data__.value + " Mbps on<br><br>" + d.target.__data__.Date + "<br><br>" + d.target.__data__.Server)
+                    })
+                    .on('mouseout', function (d) {
+                        d3.select("#tooltip").classed("hidden", true);
+                    })
+
+                svg.append("g")
+                    .attr("class", "xaxis")
+                    .attr("transform", "translate(0," + (height - padding) + ")")
+                    .call(xaxis);
+
+                svg.append("g")
+                    .attr("class", "yaxis")
+                    .attr("transform", "translate(" + padding + ",0)")
+                    .call(yaxis);
+
+                svg.append("g")
+                    .attr("class", "legendOrdinal")
+                    .attr("transform", `translate(${100}, ${padding})`);
+
+                var legend = d3.legendColor()
+                                .shape("path", d3.symbol().type(d3.symbolTriangle).size(150))
+                                .shapePadding(10)
+                                .scale(color)
+
+                svg.select(".legendOrdinal")
+                    .call(legend);
+
+            })
+        </script>
+    </body>
+</html>
