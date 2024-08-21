@@ -144,7 +144,7 @@
 
                 svg.append("g")
                     .attr("class", "legendOrdinal")
-                    .attr("transform", `translate(${100}, ${padding})`);
+                    .attr("transform", `translate(${width/2}, ${padding+(height*0.7)})`);
 
                 var legend = d3.legendColor()
                                 .shape("path", d3.symbol().type(d3.symbolTriangle).size(150))
